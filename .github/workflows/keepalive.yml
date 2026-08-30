@@ -1,0 +1,42 @@
+name: keepalive
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping-apps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Visitar y despertar apps de Streamlit
+        run: python wake_apps.py
+
+      - name: Evitar que GitHub desactive este cron a los 60 días
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          last_commit_ts=$(git log -1 --format=%ct)
+          now_ts=$(date +%s)
+          days_since=$(( (now_ts - last_commit_ts) / 86400 ))
+          echo "Días desde el último commit: $days_since"
+          if [ "$days_since" -ge 45 ]; then
+            git commit --allow-empty -m "chore: keepalive commit (evita auto-disable a los 60 días)"
+            git push
+          else
+            echo "Repo con actividad reciente, no hace falta commit vacío."
+          fi
